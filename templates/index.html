@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analytics Portfolio</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>Analytics Portfolio</h1>
+    <p class="subtitle">Interactive data visualisations built with D3.js + FastAPI</p>
+  </header>
+
+  <main>
+
+    <!-- Bar Chart -->
+    <section class="chart-card" id="bar-section">
+      <h2>Monthly Values <span class="chart-label">Bar Chart</span></h2>
+      <p class="chart-desc">Data fetched live from <code>/api/charts/bar</code></p>
+      <div id="bar-chart"></div>
+    </section>
+
+    <!-- Line Chart -->
+    <section class="chart-card" id="line-section">
+      <h2>Quarterly Trend <span class="chart-label">Line Chart</span></h2>
+      <p class="chart-desc">Data fetched live from <code>/api/charts/line</code></p>
+      <div id="line-chart"></div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Built with <a href="https://d3js.org" target="_blank">D3.js v7</a> &amp;
+       <a href="https://fastapi.tiangolo.com" target="_blank">FastAPI</a>.
+       API docs at <a href="/docs" target="_blank">/docs</a>.</p>
+  </footer>
+
+  <!-- D3 from CDN as an ES module -->
+  <script type="module">
+    import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+    // ── Shared helpers ──────────────────────────────────────────────────────────
+
+    const MARGIN = { top: 30, right: 30, bottom: 50, left: 60 };
+    const WIDTH  = 600 - MARGIN.left - MARGIN.right;
+    const HEIGHT = 350 - MARGIN.top  - MARGIN.bottom;
+
+    function makeSvg(containerId) {
+      return d3.select(`#${containerId}`)
+        .append("svg")
+          .attr("viewBox", `0 0 ${WIDTH + MARGIN.left + MARGIN.right} ${HEIGHT + MARGIN.top + MARGIN.bottom}`)
+          .attr("preserveAspectRatio", "xMidYMid meet")
+        .append("g")
+          .attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+    }
+
+    // ── Bar Chart ───────────────────────────────────────────────────────────────
+
+    async function drawBar() {
+      const data = await d3.json("/api/charts/bar");
+
+      const svg = makeSvg("bar-chart");
+
+      const x = d3.scaleBand()
+        .domain(data.map(d => d.label))
+        .range([0, WIDTH])
+        .padding(0.3);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.value) * 1.1])
+        .range([HEIGHT, 0]);
+
+      // Axes
+      svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(0,${HEIGHT})`)
+        .call(d3.axisBottom(x));
+
+      svg.append("g")
+        .attr("class", "axis")
+        .call(d3.axisLeft(y).ticks(5));
+
+      // Bars with enter animation
+      svg.selectAll(".bar")
+        .data(data)
+        .join("rect")
+          .attr("class", "bar")
+          .attr("x",      d => x(d.label))
+          .attr("width",  x.bandwidth())
+          .attr("y",      HEIGHT)
+          .attr("height", 0)
+        .transition().duration(800).delay((_, i) => i * 80)
+          .attr("y",      d => y(d.value))
+          .attr("height", d => HEIGHT - y(d.value));
+
+      // Value labels
+      svg.selectAll(".bar-label")
+        .data(data)
+        .join("text")
+          .attr("class", "bar-label")
+          .attr("x", d => x(d.label) + x.bandwidth() / 2)
+          .attr("y", d => y(d.value) - 6)
+          .attr("text-anchor", "middle")
+          .text(d => d.value);
+    }
+
+    // ── Line Chart ──────────────────────────────────────────────────────────────
+
+    async function drawLine() {
+      const data = await d3.json("/api/charts/line");
+
+      const svg = makeSvg("line-chart");
+
+      const x = d3.scalePoint()
+        .domain(data.map(d => d.label))
+        .range([0, WIDTH])
+        .padding(0.5);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.value) * 1.1])
+        .range([HEIGHT, 0]);
+
+      // Axes
+      svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(0,${HEIGHT})`)
+        .call(d3.axisBottom(x));
+
+      svg.append("g")
+        .attr("class", "axis")
+        .call(d3.axisLeft(y).ticks(5));
+
+      // Area fill
+      const area = d3.area()
+        .x(d => x(d.label))
+        .y0(HEIGHT)
+        .y1(d => y(d.value))
+        .curve(d3.curveMonotoneX);
+
+      svg.append("path")
+        .datum(data)
+        .attr("class", "area")
+        .attr("d", area);
+
+      // Line
+      const line = d3.line()
+        .x(d => x(d.label))
+        .y(d => y(d.value))
+        .curve(d3.curveMonotoneX);
+
+      const path = svg.append("path")
+        .datum(data)
+        .attr("class", "line")
+        .attr("d", line);
+
+      // Draw animation
+      const totalLength = path.node().getTotalLength();
+      path
+        .attr("stroke-dasharray", `${totalLength} ${totalLength}`)
+        .attr("stroke-dashoffset", totalLength)
+        .transition().duration(1200).ease(d3.easeLinear)
+          .attr("stroke-dashoffset", 0);
+
+      // Dots
+      svg.selectAll(".dot")
+        .data(data)
+        .join("circle")
+          .attr("class", "dot")
+          .attr("cx", d => x(d.label))
+          .attr("cy", d => y(d.value))
+          .attr("r", 5);
+    }
+
+    // ── Init ────────────────────────────────────────────────────────────────────
+
+    drawBar().catch(console.error);
+    drawLine().catch(console.error);
+  </script>
+
+</body>
+</html>

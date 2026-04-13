@@ -1,0 +1,157 @@
+/* ── Reset & base ────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --border:    #2e3147;
+  --accent:    #5b8dee;
+  --accent2:   #e05f7f;
+  --text:      #e2e4f0;
+  --muted:     #7b7f9e;
+  --radius:    12px;
+  --font:      'Segoe UI', system-ui, sans-serif;
+}
+
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Header ──────────────────────────────────────────────────── */
+header {
+  padding: 3rem 2rem 2rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+header .subtitle {
+  color: var(--muted);
+  margin-top: 0.5rem;
+  font-size: 1rem;
+}
+
+/* ── Main grid ───────────────────────────────────────────────── */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+  gap: 2rem;
+  padding: 2.5rem 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Chart cards ─────────────────────────────────────────────── */
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.75rem 2rem 2rem;
+}
+
+.chart-card h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chart-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+}
+
+.chart-desc {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.chart-desc code {
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: var(--accent2);
+}
+
+/* SVG fills the card width responsively */
+.chart-card svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* ── D3 element styles ───────────────────────────────────────── */
+.axis text        { fill: var(--muted); font-size: 0.78rem; }
+.axis path,
+.axis line        { stroke: var(--border); }
+
+.bar              { fill: var(--accent); opacity: 0.85; }
+.bar:hover        { opacity: 1; cursor: pointer; }
+
+.bar-label {
+  fill: var(--text);
+  font-size: 0.72rem;
+}
+
+.line {
+  fill: none;
+  stroke: var(--accent2);
+  stroke-width: 2.5px;
+}
+
+.area {
+  fill: var(--accent2);
+  opacity: 0.12;
+}
+
+.dot {
+  fill: var(--accent2);
+  stroke: var(--bg);
+  stroke-width: 2px;
+}
+
+/* ── Footer ──────────────────────────────────────────────────── */
+footer {
+  text-align: center;
+  padding: 1.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 620px) {
+  main { grid-template-columns: 1fr; padding: 1.25rem 1rem; }
+  header h1 { font-size: 1.6rem; }
+}
