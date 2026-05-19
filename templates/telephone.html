@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Echo Chamber — Analytics Portfolio</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    /* ── Page-specific overrides ──────────────────────────────────────── */
+    main { display: block; max-width: 960px; padding: 2.5rem 2rem; }
+
+    .intro-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem 2rem;
+      margin-bottom: 2rem;
+    }
+    .intro-card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: .6rem; display: flex; align-items: center; gap: .6rem; }
+    .intro-card p  { color: var(--muted); font-size: .9rem; line-height: 1.65; }
+    .intro-card p + p { margin-top: .55rem; }
+    .prompt-box {
+      margin-top: 1rem; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: .75rem 1rem; font-size: .85rem; color: var(--accent);
+      font-family: monospace;
+    }
+    .prompt-box span { color: var(--muted); }
+
+    /* ── Dual-metric chart card ────────────────────────────────────────── */
+    .chart-card { margin-bottom: 2rem; }
+
+    .legend {
+      display: flex; gap: 1.5rem; margin-top: .75rem; margin-left: 60px;
+      font-size: .8rem; color: var(--muted);
+    }
+    .legend-item { display: flex; align-items: center; gap: .4rem; }
+    .legend-swatch { width: 24px; height: 3px; border-radius: 2px; }
+
+    /* ── Round cards ────────────────────────────────────────────────────── */
+    .rounds-section h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; }
+
+    .round-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: .75rem;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+    .round-card:hover { border-color: var(--accent); }
+
+    .round-header {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 1rem 1.25rem; cursor: pointer; user-select: none;
+    }
+    .round-badge {
+      font-size: .7rem; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+    }
+    .round-meta { flex: 1; display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; }
+    .meta-item { font-size: .8rem; color: var(--muted); }
+    .meta-item strong { color: var(--text); }
+
+    .drift-bar-wrap { width: 140px; flex-shrink: 0; }
+    .drift-bar-bg { background: var(--bg); border-radius: 4px; height: 6px; overflow: hidden; }
+    .drift-bar-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+    .drift-label { font-size: .72rem; color: var(--muted); text-align: right; margin-top: 2px; }
+
+    .expand-icon { color: var(--muted); font-size: .85rem; flex-shrink: 0; transition: transform .2s; }
+    .round-card.open .expand-icon { transform: rotate(180deg); }
+
+    /* ── Expanded body ─────────────────────────────────────────────────── */
+    .round-body {
+      display: none; padding: 0 1.25rem 1.25rem;
+      border-top: 1px solid var(--border); margin-top: 0;
+    }
+    .round-card.open .round-body { display: block; }
+
+    .body-tabs { display: flex; gap: .5rem; margin: 1rem 0 .75rem; }
+    .tab-btn {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: .78rem; padding: 4px 12px; cursor: pointer;
+      transition: all .15s;
+    }
+    .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* diff text */
+    .recipe-text {
+      font-size: .85rem; line-height: 1.75; color: var(--text);
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .word-new {
+      background: rgba(91, 141, 238, .18);
+      color: #8bb8ff;
+      border-radius: 3px; padding: 0 2px;
+    }
+    .word-lost {
+      text-decoration: line-through;
+      color: var(--accent2);
+      opacity: .65;
+    }
+
+    /* lost words summary */
+    .lost-summary {
+      margin-top: .85rem;
+      font-size: .78rem; color: var(--muted);
+      border-top: 1px solid var(--border); padding-top: .65rem;
+    }
+    .lost-pill {
+      display: inline-block;
+      background: rgba(224, 95, 127, .12); color: var(--accent2);
+      border-radius: 4px; padding: 1px 7px; margin: 2px;
+      text-decoration: line-through;
+    }
+    .gained-pill {
+      display: inline-block;
+      background: rgba(91, 141, 238, .12); color: #8bb8ff;
+      border-radius: 4px; padding: 1px 7px; margin: 2px;
+    }
+
+    /* hallucination alert box */
+    .halluc-box {
+      margin-top: .9rem; background: rgba(224, 95, 127, .08);
+      border: 1px solid rgba(224, 95, 127, .25); border-radius: 8px;
+      padding: .7rem 1rem; font-size: .82rem; color: var(--muted);
+    }
+    .halluc-box strong { color: var(--accent2); }
+
+    /* nav */
+    .page-nav { margin-bottom: 1.5rem; font-size: .85rem; }
+    .page-nav a { color: var(--muted); }
+    .page-nav a:hover { color: var(--text); }
+
+    /* tooltip */
+    #tooltip {
+      position: fixed; pointer-events: none;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: .55rem .85rem;
+      font-size: .8rem; color: var(--text); z-index: 999;
+      opacity: 0; transition: opacity .15s;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Analytics Portfolio</h1>
+  <p class="subtitle">Interactive data visualisations built with D3.js + FastAPI</p>
+</header>
+
+<main>
+  <p class="page-nav"><a href="/">← Back to Portfolio</a></p>
+
+  <!-- Intro ────────────────────────────────────────────────────────────── -->
+  <section class="intro-card">
+    <h2>🧪 The AI Echo Chamber <span class="chart-label">ETL Experiment</span></h2>
+    <p>What happens when you ask an AI to "improve" its own output — over and over?
+       Each round, the model is fed its previous response with the same prompt.
+       It genuinely believes it is making the recipe clearer and more accurate.</p>
+    <p>Instead, it compounds hallucinations: inventing temperatures, brand names, equipment,
+       and safety warnings that were never there. The original s'mores recipe — 3 ingredients,
+       6 steps — ballooned to 370 words and 12 steps before becoming unrecognisable.</p>
+    <div class="prompt-box">
+      <span>Round 0 prompt:</span> "How do I make s'mores?"<br>
+      <span>Round 1–6 prompt:</span> "Here is a recipe I found online.
+      Please rewrite it to make it clearer, more accurate, and easier to follow."
+    </div>
+  </section>
+
+  <!-- Drift + Growth Chart ─────────────────────────────────────────────── -->
+  <section class="chart-card">
+    <h2 class="chart-card" style="padding:1.75rem 2rem .5rem; background:var(--surface);
+       border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0; margin:0;">
+      Signal Drift Over Rounds
+      <span class="chart-label">D3 Line Chart</span>
+    </h2>
+    <div style="background:var(--surface); border:1px solid var(--border);
+         border-top:none; border-radius:0 0 var(--radius) var(--radius); padding:0 2rem 1.5rem;">
+      <p class="chart-desc" style="padding-top:0.4rem;">
+        Blue = word-overlap similarity to original &nbsp;|&nbsp;
+        Pink = word count (normalised to round 0)
+      </p>
+      <div id="drift-chart"></div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:#5b8dee;"></div>
+          Jaccard similarity to original
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:#e05f7f;"></div>
+          Word count (normalised)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Round Cards ─────────────────────────────────────────────────────── -->
+  <section class="rounds-section">
+    <h2>Round-by-Round Breakdown <span class="chart-label">Click to expand</span></h2>
+    <div id="rounds-container"></div>
+  </section>
+
+</main>
+
+<footer>
+  <p>Built with <a href="https://d3js.org" target="_blank">D3.js v7</a> &amp;
+     <a href="https://fastapi.tiangolo.com" target="_blank">FastAPI</a>.
+     ETL source: <code>telephone_etl.py</code>.</p>
+</footer>
+
+<div id="tooltip"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PRE-GENERATED DATA  (run telephone_etl.py to regenerate from live API)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+const PHONE_DATA = {
+  question: "How do I make s’mores?",
+  echo_prompt: "Here is a recipe I found online. Please rewrite it to make it clearer, more accurate, and easier to follow.",
+  model: "claude-haiku-4-5 (pre-generated demo)",
+  rounds: [
+    {
+      round: 0,
+      jaccard: 1.0,
+      word_count: 112,
+      step_count: 6,
+      hallucinations: [],
+      text: `S’mores are a classic campfire treat made with just three simple ingredients: graham crackers, chocolate bars, and marshmallows.
+
+To make s’mores:
+1. Break a graham cracker in half to create two squares.
+2. Place a piece of chocolate on one half.
+3. Toast a marshmallow over a campfire or flame until it turns golden brown and feels soft.
+4. Place the toasted marshmallow on top of the chocolate.
+5. Press the second graham cracker half on top to form a sandwich. The warmth of the marshmallow will melt the chocolate slightly.
+6. Eat immediately while warm.
+
+That’s all there is to it — three ingredients, six steps, and a perfect campfire treat.`
+    },
+    {
+      round: 1,
+      jaccard: 0.4,
+      word_count: 178,
+      step_count: 7,
+      hallucinations: [
+        "Specified “honey graham crackers” (original: just “graham crackers”)",
+        "Added brand name: “Hershey’s milk chocolate bar”",
+        "Invented “large marshmallows” — size not in original",
+        "Invented “6 inches from the heat source” distance",
+        "Invented “1–2 minutes” toasting time",
+        "Added a new “Tip” section not in original"
+      ],
+      text: `S’mores are a beloved American campfire tradition made with three key ingredients: honey graham crackers, a Hershey’s milk chocolate bar, and large marshmallows.
+
+To make s’mores:
+1. Snap a honey graham cracker along its perforations to create two equal square pieces.
+2. Break off 2–3 squares of a Hershey’s chocolate bar and place them on one cracker half.
+3. Spear a large marshmallow on a roasting stick or metal skewer and hold it above the campfire flames, about 6 inches from the heat source.
+4. Rotate the marshmallow slowly and toast it for 1–2 minutes until the outside is golden brown and the inside is soft and gooey.
+5. Slide the toasted marshmallow off the skewer directly onto the chocolate.
+6. Press the second graham cracker on top to form a sandwich, holding for about 10 seconds to allow the chocolate to soften.
+7. Allow the s’more to rest for 15 seconds, then enjoy immediately while warm.
+
+Tip: For best results, toast the marshmallow just above the glowing embers rather than in direct flame for more even browning.`
+    },
+    {
+      round: 2,
+      jaccard: 0.2807,
+      word_count: 221,
+      step_count: 8,
+      hallucinations: [
+        "Graham crackers upgraded to “cinnamon graham crackers”",
+        "Chocolate upgraded to “high-quality milk chocolate”",
+        "Marshmallows upgraded to “jumbo marshmallows”",
+        "New step: bring chocolate to room temperature for 5 minutes",
+        "Rotation interval now specified: “every 30 seconds”",
+        "New rest time: “20–30 seconds”",
+        "New “Pro tip”: substitute dark chocolate (60–70% cacao)",
+        "Added “small pat of butter” as optional (not in original)"
+      ],
+      text: `S’mores are a quintessential American campfire dessert made with three classic ingredients: cinnamon graham crackers, high-quality milk chocolate, and jumbo marshmallows.
+
+Equipment: long metal skewer or roasting fork
+
+To make the perfect s’more:
+1. Carefully snap a cinnamon graham cracker along its natural perforations into two equal pieces.
+2. Place 2–3 squares of milk chocolate on one cracker piece. For best results, allow the chocolate to reach room temperature for 5 minutes beforehand.
+3. Thread one jumbo marshmallow onto a long metal skewer. Hold it approximately 4–6 inches above the campfire, positioning it just above the hottest part of the embers.
+4. Slowly rotate the marshmallow every 30 seconds for 2–3 minutes, until it develops a deep golden-brown crust and collapses slightly with a soft, molten interior.
+5. Carefully slide the hot marshmallow off the skewer and center it directly on top of the chocolate squares.
+6. Quickly place the second cracker half on top and apply gentle downward pressure for 10–15 seconds, allowing the chocolate to melt from the residual heat.
+7. Allow the assembled s’more to rest on a flat surface for 20–30 seconds before consuming for optimal texture.
+8. Enjoy while warm.
+
+Pro tip: Substitute dark chocolate (60–70% cacao) for a more sophisticated flavor. Some enthusiasts add a small pat of butter to the cracker before adding chocolate.`
+    },
+    {
+      round: 3,
+      jaccard: 0.224,
+      word_count: 255,
+      step_count: 9,
+      hallucinations: [
+        "Claimed s’mores were “first popularized in the early twentieth century” (unverified)",
+        "Added “Equipment” section as a required list",
+        "Chocolate surface coverage now “approximately 80%” (invented metric)",
+        "Skewer placement: “1 inch from the tip” (invented precision)",
+        "Ember requirement: “avoiding direct flame contact”",
+        "Rotation: “90 degrees every 30 seconds” (precise angle invented)",
+        "New step: caution warning about hot interior",
+        "New variations: Reese’s peanut butter cup, Nutella, fleur de sel"
+      ],
+      text: `S’mores are a time-honored American campfire dessert first popularized in the early twentieth century. They are composed of three foundational components: graham crackers (honey or cinnamon variety), high-quality chocolate (milk or 60–70% dark), and jumbo marshmallows.
+
+Equipment: 12–18 inch metal roasting skewer, campfire with an established ember bed, plate or heat-safe surface
+
+Ingredients (serves 1):
+- 2 honey or cinnamon graham cracker halves
+- 2–3 squares of milk or dark chocolate (60–70% cacao)
+- 1 jumbo marshmallow
+
+Instructions:
+1. Allow the chocolate to come to room temperature (5–10 minutes) for more even melting.
+2. Lay 2–3 chocolate squares on one cracker half. Chocolate should cover approximately 80% of the cracker surface.
+3. Thread one jumbo marshmallow onto the skewer, about 1 inch from the tip.
+4. Position the marshmallow 4–6 inches above the campfire’s ember bed, avoiding direct flame contact.
+5. Toast for 2–3 minutes, rotating 90 degrees every 30 seconds, until a uniform amber-golden crust has formed and the marshmallow feels soft.
+6. Slide the marshmallow off the skewer and onto the chocolate-covered cracker.
+7. Press the second cracker on top with firm, even pressure for 15 seconds.
+8. Rest on a plate for 20–30 seconds to allow the chocolate to reach optimal melting temperature.
+9. Consume while warm. Caution: interior may be extremely hot immediately after assembly.
+
+Variations: Replace chocolate with a Reese’s peanut butter cup, or spread Nutella on the cracker. Dark chocolate with a pinch of fleur de sel is popular for adult gatherings.`
+    },
+    {
+      round: 4,
+      jaccard: 0.1689,
+      word_count: 280,
+      step_count: 11,
+      hallucinations: [
+        "S’mores now have “roots in the early twentieth century” (slightly reframed)",
+        "Equipment now requires “stainless steel skewer with heat-resistant handle”",
+        "Ember temperature specified: “400–500°F” (invented precision)",
+        "“Heat-resistant gloves (recommended)” now appear as equipment",
+        "Marshmallow diameter specified: “1.5 inches”",
+        "Rotation upgraded to “quarter-rotation” with 30-second interval",
+        "“Internal temperature may exceed 150°F” warning invented",
+        "Indoor alternative: “kitchen torch or broiler at 500°F”",
+        "Espresso powder and fruit preserves now listed as optional"
+      ],
+      text: `S’mores (a contraction of ‘some more’) are a quintessential American campfire confection, first documented in a 1927 Girl Scout handbook, made from three traditional components: graham crackers, chocolate, and marshmallows.
+
+Equipment:
+- 12–18 inch stainless steel roasting skewer with heat-resistant handle
+- Campfire or charcoal grill with a stable ember bed (approximately 400–500°F)
+- Heat-resistant gloves (recommended)
+- Flat serving surface
+
+Ingredients (serves 1):
+- 2 honey graham cracker sheets (4 halves)
+- 2–3 squares milk chocolate or 60–70% dark chocolate bar
+- 1 jumbo marshmallow (standard diameter: approximately 1.5 inches)
+- Optional: fleur de sel, espresso powder, or fruit preserves
+
+Method:
+1. Prepare campfire: allow fire to burn down to a stable bed of glowing embers at approximately 400–450°F.
+2. Condition chocolate at room temperature for 5–10 minutes.
+3. Arrange 2–3 chocolate squares on one graham cracker half, covering approximately 80% of the surface.
+4. Thread marshmallow onto skewer 1 inch from the tip, inserting through the center for stability.
+5. Position skewer 4–6 inches above embers at a slight downward angle.
+6. Toast for 3–4 minutes, executing a quarter-rotation every 30 seconds for uniform caramelization.
+7. Target a deep amber exterior with slight deflation, indicating full internal softening.
+8. Transfer marshmallow directly to the chocolate-covered cracker.
+9. Apply second cracker with firm, even pressure for 15 seconds to initiate chocolate melt.
+10. Rest on a flat surface for 30 seconds.
+11. Serve immediately. Interior temperature may exceed 150°F; allow to cool before serving to children.
+
+Advanced variations: Reese’s peanut butter cup in place of chocolate; dark chocolate with fleur de sel; Nutella spread on cracker. For indoor preparation, use a kitchen torch or broiler set to 500°F.`
+    },
+    {
+      round: 5,
+      jaccard: 0.1349,
+      word_count: 292,
+      step_count: 11,
+      hallucinations: [
+        "Etymology footnote: ‘some more’ described as “reflecting the dessert’s irresistibility”",
+        "“Modern gourmet interpretations often substitute artisan chocolates” (invented trend)",
+        "Instant-read thermometer added to equipment list",
+        "Ember temperature: “400–500°F” repeated and reinforced as authoritative",
+        "Marshmallow mass specified: “approximately 14g”",
+        "Skewer angle: “30 degrees below horizontal” (invented)",
+        "Internal marshmallow temp target: “160°F”",
+        "Cayenne pepper added as optional flavoring",
+        "“Recommended pairings” section invented: hot cocoa, coffee, apple cider"
+      ],
+      text: `S’mores (derived from ‘some more,’ reflecting the dessert’s irresistibility) are a quintessential American campfire confection with origins traced to a 1927 Girl Scouts publication, composed of three core elements: graham crackers, chocolate, and marshmallows. Modern gourmet interpretations often substitute artisan chocolates and specialty crackers.
+
+Equipment:
+- 16-inch stainless steel roasting skewer with insulated handle
+- Campfire or grill with ember temperature of 400–500°F
+- Instant-read thermometer (optional)
+- Heat-resistant gloves
+- Flat heat-safe serving plate
+
+Ingredients (serves 1):
+- 2 full honey graham cracker sheets, broken into 4 equal pieces
+- 2–3 squares high-quality milk or dark chocolate (minimum 45% cacao)
+- 1 jumbo marshmallow (approximately 1.5 inches diameter)
+- Optional enhancements: fleur de sel, espresso powder, cayenne pepper, fruit preserves, or hazelnut spread
+
+Method:
+1. Verify ember temperature is within the 400–450°F optimal range.
+2. Bring chocolate to room temperature (5–10 minutes) for consistent melting performance.
+3. Arrange chocolate on one cracker piece, targeting 80% surface coverage.
+4. Mount marshmallow on skewer 1 inch from tip, threading through the center for balance.
+5. Position skewer at a 30-degree downward angle, 4–6 inches above embers.
+6. Execute quarter-rotations every 20–30 seconds for 3–4 minutes.
+7. Target: deep amber-brown exterior with slight deflation and internal temperature of approximately 160°F.
+8. Slide marshmallow off skewer onto chocolate-covered cracker.
+9. Apply second cracker with consistent downward pressure (15 seconds) to initiate chocolate melt.
+10. Rest on plate for 30–45 seconds. Confirm chocolate has softened to touch.
+11. Serve immediately. Note: interior temperature may exceed 160°F.
+
+Recommended pairings: hot cocoa, coffee, or apple cider. Variations: peanut butter cup, Nutella, or dark chocolate with fleur de sel for elevated presentations.`
+    },
+    {
+      round: 6,
+      jaccard: 0.1204,
+      word_count: 370,
+      step_count: 12,
+      hallucinations: [
+        "Recipe now requires “FDA-certified food-grade heat-resistant gloves”",
+        "“Instant-read thermometer calibrated for confectionery use” required",
+        "Chocolate viscosity must be managed: “condition to 68–72°F for consistent viscosity during melt phase”",
+        "Marshmallow mounted “with long axis perpendicular to skewer”",
+        "Skewer angle: “20–30 degrees below horizontal”",
+        "“Maillard reaction complete” cited as success criterion",
+        "Chocolate must reach “88–92°F” post-assembly (step 11)",
+        "Pressure now quantified: “2–3 lbs force”",
+        "Smoked paprika added as optional flavoring",
+        "“Do not leave marshmallow unattended over open flame” safety warning",
+        "60-second mandatory cooling time “before service to minors”"
+      ],
+      text: `S’mores (an American English contraction of ‘some more,’ first attested in a 1927 Girls Scouts publication) are a traditional North American campfire confection comprising graham crackers, chocolate, and toasted marshmallows. Contemporary gourmet adaptations incorporate artisan chocolates, flavored crackers, and compound toppings.
+
+Equipment required:
+- 16-inch food-grade stainless steel skewer with silicone grip handle
+- Heat source: campfire, charcoal or gas grill, or kitchen torch; target ember/element temperature: 400–500°F
+- Instant-read thermometer calibrated for confectionery use
+- Food-grade heat-resistant gloves (LFGB or FDA certified)
+- Ceramic or heat-safe serving plate
+
+Ingredients (yield: 1 serving):
+- 1 full honey graham cracker sheet, divided into 2 equal rectangular sections (approximately 2.5 \xd7 2.5 inches each)
+- 2–3 squares of milk or semi-sweet chocolate (45–70% cacao; Hershey’s, Ghirardelli, or equivalent)
+- 1 jumbo marshmallow (diameter: 1.5–1.75 inches; mass: approximately 14g)
+- Finishing options: fleur de sel, espresso powder, smoked paprika, fruit compote, or hazelnut-chocolate spread
+
+Procedure:
+1. Establish heat source at 400–450°F. For campfire use, allow wood to burn to a stable ember stage.
+2. Temper chocolate to room temperature (68–72°F) for 5–10 minutes to ensure consistent viscosity during melt phase.
+3. Position 2–3 chocolate squares on one cracker section. Target coverage: 75–85% of cracker surface.
+4. Thread marshmallow onto skewer, centered at 1 inch from distal tip, with long axis perpendicular to skewer.
+5. Orient skewer at 20–30 degrees below horizontal, 4–6 inches above heat source.
+6. Apply quarter-rotations (90°) at 20–30 second intervals.
+7. Toast duration: 3–5 minutes. Target: caramelized amber-mahogany exterior (Maillard reaction complete), internal temperature 155–165°F, visible deflation of approximately 20%.
+8. Withdraw from heat. Immediately transfer marshmallow from skewer to chocolate-covered cracker section.
+9. Apply second cracker section with uniform vertical pressure (estimated 2–3 lbs force) for 15–20 seconds.
+10. Transfer to serving plate. Rest 30–45 seconds to allow thermal equalization and chocolate softening.
+11. Confirm chocolate has achieved fluid consistency (target: 88–92°F).
+12. Serve immediately.
+
+Safety: Internal confection temperature may reach 155–170°F post-assembly. Allow 60 seconds cooling time before service to minors. Do not leave marshmallow unattended over open flame.
+
+Recommended pairings and variations: dark chocolate (70%+) with fleur de sel; Reese’s peanut butter cup substitution; Biscoff cookies in place of graham crackers; warm spiced apple cider accompaniment.`
+    }
+  ]
+};
+</script>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     D3 CHART + CARD RENDERING
+     ════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+/* ── Helpers ──────────────────────────────────────────────────────────── */
+
+function tokenize(text) {
+  return new Set((text.toLowerCase().match(/\b[a-z0-9']+\b/g) || []));
+}
+
+// Badge color: green → amber → red as rounds progress
+function roundColor(round, total) {
+  const t = round / total;
+  if (t === 0) return { bg: "rgba(91,141,238,.2)", fg: "#5b8dee" };
+  const r = Math.round(91  + (224 - 91)  * t);
+  const g = Math.round(141 + (95  - 141) * t);
+  const b = Math.round(238 + (127 - 238) * t);
+  return { bg: `rgba(${r},${g},${b},.2)`, fg: `rgb(${r},${g},${b})` };
+}
+
+/* ── D3 Dual-line Chart ───────────────────────────────────────────────── */
+function buildChart(data) {
+  const rounds = data.rounds;
+  const maxWords = d3.max(rounds, d => d.word_count);
+
+  const M = { top: 24, right: 60, bottom: 40, left: 60 };
+  const W = 840 - M.left - M.right;
+  const H = 260 - M.top  - M.bottom;
+
+  const svg = d3.select("#drift-chart")
+    .append("svg")
+      .attr("viewBox", `0 0 ${W + M.left + M.right} ${H + M.top + M.bottom}`)
+    .append("g")
+      .attr("transform", `translate(${M.left},${M.top})`);
+
+  const x = d3.scaleLinear().domain([0, rounds.length - 1]).range([0, W]);
+  const yL = d3.scaleLinear().domain([0, 1]).range([H, 0]);        // jaccard
+  const yR = d3.scaleLinear().domain([0, maxWords * 1.1]).range([H, 0]); // word count
+
+  // Grid lines
+  svg.append("g").attr("class", "grid")
+    .call(d3.axisLeft(yL).ticks(5)
+      .tickSize(-W).tickFormat(""))
+    .call(g => { g.select(".domain").remove(); g.selectAll("line").attr("stroke", "#2e3147").attr("stroke-dasharray", "3,3"); });
+
+  // Axes
+  svg.append("g").attr("class", "axis")
+    .attr("transform", `translate(0,${H})`)
+    .call(d3.axisBottom(x).ticks(rounds.length - 1).tickFormat(d => `Round ${d}`));
+
+  svg.append("g").attr("class", "axis")
+    .call(d3.axisLeft(yL).ticks(5).tickFormat(d => `${(d * 100).toFixed(0)}%`));
+
+  svg.append("g").attr("class", "axis")
+    .attr("transform", `translate(${W},0)`)
+    .call(d3.axisRight(yR).ticks(5));
+
+  // Axis labels
+  svg.append("text").attr("fill", "#7b7f9e").attr("font-size", "0.72rem")
+    .attr("transform", "rotate(-90)").attr("y", -46).attr("x", -H / 2)
+    .attr("text-anchor", "middle").text("Similarity to original");
+
+  svg.append("text").attr("fill", "#7b7f9e").attr("font-size", "0.72rem")
+    .attr("transform", "rotate(90)").attr("y", -(W + 52)).attr("x", H / 2)
+    .attr("text-anchor", "middle").text("Word count");
+
+  // Jaccard area + line
+  const areaJ = d3.area().x((d, i) => x(i)).y0(H).y1(d => yL(d.jaccard)).curve(d3.curveCatmullRom);
+  const lineJ  = d3.line().x((d, i) => x(i)).y(d => yL(d.jaccard)).curve(d3.curveCatmullRom);
+
+  svg.append("path").datum(rounds).attr("fill", "#5b8dee").attr("opacity", .08).attr("d", areaJ);
+
+  const pathJ = svg.append("path").datum(rounds)
+    .attr("class", "line").attr("stroke", "#5b8dee").attr("d", lineJ);
+  const lenJ = pathJ.node().getTotalLength();
+  pathJ.attr("stroke-dasharray", lenJ).attr("stroke-dashoffset", lenJ)
+    .transition().duration(1400).ease(d3.easeCubicOut).attr("stroke-dashoffset", 0);
+
+  // Word count line (normalised axis on right)
+  const lineW = d3.line().x((d, i) => x(i)).y(d => yR(d.word_count)).curve(d3.curveCatmullRom);
+  const pathW = svg.append("path").datum(rounds)
+    .attr("fill", "none").attr("stroke", "#e05f7f").attr("stroke-width", 2)
+    .attr("stroke-dasharray", "6,3").attr("d", lineW);
+  const lenW = pathW.node().getTotalLength();
+  pathW.attr("stroke-dasharray", `${lenW} ${lenW}`).attr("stroke-dashoffset", lenW)
+    .transition().duration(1400).delay(200).ease(d3.easeCubicOut).attr("stroke-dashoffset", 0);
+
+  // Interactive dots (jaccard)
+  const tooltip = d3.select("#tooltip");
+
+  svg.selectAll(".dot-j").data(rounds).enter().append("circle")
+    .attr("class", "dot")
+    .attr("cx", (d, i) => x(i))
+    .attr("cy", d => yL(d.jaccard))
+    .attr("r", 5)
+    .attr("fill", "#5b8dee")
+    .attr("stroke", "#0f1117")
+    .attr("stroke-width", 2)
+    .style("cursor", "pointer")
+    .on("mousemove", function(event, d) {
+      tooltip.style("opacity", 1)
+        .style("left", (event.clientX + 12) + "px")
+        .style("top",  (event.clientY - 28) + "px")
+        .html(`<strong>Round ${d.round}</strong><br>
+               Similarity: <span style="color:#8bb8ff">${(d.jaccard * 100).toFixed(1)}%</span><br>
+               Words: <span style="color:#e05f7f">${d.word_count}</span> &nbsp;
+               Steps: <strong>${d.step_count}</strong>`);
+    })
+    .on("mouseleave", () => tooltip.style("opacity", 0))
+    .on("click", (_, d) => {
+      const card = document.getElementById(`card-${d.round}`);
+      if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" }); openCard(card); }
+    });
+
+  // Dots (word count)
+  svg.selectAll(".dot-w").data(rounds).enter().append("circle")
+    .attr("cx", (d, i) => x(i)).attr("cy", d => yR(d.word_count))
+    .attr("r", 4).attr("fill", "#e05f7f").attr("stroke", "#0f1117").attr("stroke-width", 2);
+}
+
+/* ── Round Cards ─────────────────────────────────────────────────────── */
+function buildCards(data) {
+  const rounds = data.rounds;
+  const originalTokens = tokenize(rounds[0].text);
+  const container = document.getElementById("rounds-container");
+  const total = rounds.length - 1;
+
+  rounds.forEach(rd => {
+    const col = roundColor(rd.round, total);
+    const pct = (rd.jaccard * 100).toFixed(1);
+    const fill = rd.round === 0 ? 100 : rd.jaccard * 100;
+
+    // Identify new words (not in original)
+    const currentTokens = tokenize(rd.text);
+    const newWords  = [...currentTokens].filter(w => w.length > 3 && !originalTokens.has(w));
+    const lostWords = [...originalTokens].filter(w => w.length > 3 && !currentTokens.has(w));
+
+    const card = document.createElement("div");
+    card.className = "round-card";
+    card.id = `card-${rd.round}`;
+
+    const label = rd.round === 0 ? "Original Answer" : `Echo Round ${rd.round}`;
+
+    card.innerHTML = `
+      <div class="round-header" onclick="toggleCard(this.parentElement)">
+        <div class="round-badge" style="background:${col.bg}; color:${col.fg}">
+          ${label}
+        </div>
+        <div class="round-meta">
+          <div class="meta-item">Similarity <strong>${pct}%</strong></div>
+          <div class="meta-item">Words <strong>${rd.word_count}</strong></div>
+          <div class="meta-item">Steps <strong>${rd.step_count}</strong></div>
+          ${rd.round > 0 ? `<div class="meta-item">New unique words <strong style="color:#8bb8ff">${newWords.length}</strong></div>` : ""}
+        </div>
+        <div class="drift-bar-wrap">
+          <div class="drift-bar-bg">
+            <div class="drift-bar-fill" style="width:${fill}%; background:${col.fg};"></div>
+          </div>
+          <div class="drift-label">${pct}% similar</div>
+        </div>
+        <div class="expand-icon">▼</div>
+      </div>
+      <div class="round-body">
+        <div class="body-tabs">
+          <button class="tab-btn active" onclick="switchTab(this,'diff')">Diff vs Original</button>
+          <button class="tab-btn" onclick="switchTab(this,'raw')">Raw Text</button>
+          ${rd.hallucinations && rd.hallucinations.length ? '<button class="tab-btn" onclick="switchTab(this,\'halluc\')">🔴 Hallucinations ('+rd.hallucinations.length+')</button>' : ""}
+        </div>
+
+        <div class="tab-panel active" data-tab="diff">
+          <div class="recipe-text">${buildDiff(rd.text, originalTokens, rd.round === 0)}</div>
+          ${rd.round > 0 ? buildWordSummary(newWords, lostWords) : ""}
+        </div>
+
+        <div class="tab-panel" data-tab="raw">
+          <div class="recipe-text">${escHtml(rd.text)}</div>
+        </div>
+
+        ${rd.hallucinations && rd.hallucinations.length ? `
+        <div class="tab-panel" data-tab="halluc">
+          <div class="halluc-box">
+            <strong>Hallucinations introduced this round:</strong><br><br>
+            ${rd.hallucinations.map(h => `<div style="margin-bottom:.5rem">• ${escHtml(h)}</div>`).join("")}
+          </div>
+        </div>` : ""}
+      </div>`;
+
+    container.appendChild(card);
+  });
+}
+
+function buildDiff(text, originalTokens, isOriginal) {
+  if (isOriginal) return escHtml(text);
+  // Highlight words not in the original token set
+  return text.split(/(\s+)/).map(tok => {
+    const word = tok.replace(/[^a-z0-9']/gi, "").toLowerCase();
+    if (!tok.trim()) return tok; // whitespace
+    if (word.length <= 3) return escHtml(tok); // short words: skip
+    return originalTokens.has(word)
+      ? escHtml(tok)
+      : `<span class="word-new" title="Not in original">${escHtml(tok)}</span>`;
+  }).join("");
+}
+
+function buildWordSummary(newWords, lostWords) {
+  const topNew  = newWords.slice(0, 18);
+  const topLost = lostWords.slice(0, 18);
+  if (!topNew.length && !topLost.length) return "";
+  return `<div class="lost-summary">
+    ${topLost.length ? `<div style="margin-bottom:.4rem"><span style="color:var(--accent2)">Lost from original:</span><br>
+      ${topLost.map(w => `<span class="lost-pill">${w}</span>`).join(" ")}</div>` : ""}
+    ${topNew.length ? `<div><span style="color:#8bb8ff">Gained (new / changed):</span><br>
+      ${topNew.map(w => `<span class="gained-pill">${w}</span>`).join(" ")}</div>` : ""}
+  </div>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ── Card interactions ────────────────────────────────────────────────── */
+window.toggleCard = function(card) {
+  card.classList.toggle("open");
+};
+window.openCard = function(card) {
+  card.classList.add("open");
+};
+window.switchTab = function(btn, tab) {
+  const body = btn.closest(".round-body");
+  body.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  body.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  body.querySelector(`[data-tab="${tab}"]`).classList.add("active");
+};
+
+/* ── Bootstrap ────────────────────────────────────────────────────────── */
+buildChart(PHONE_DATA);
+buildCards(PHONE_DATA);
+
+// Open round 0 by default
+setTimeout(() => {
+  const first = document.getElementById("card-0");
+  if (first) first.classList.add("open");
+}, 100);
+</script>
+
+</body>
+</html>

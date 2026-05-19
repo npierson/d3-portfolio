@@ -39,3 +39,15 @@ app.include_router(data.router, prefix="/api", tags=["data"])
 async def index(request: Request):
     """Serve the portfolio home page."""
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/stacked", include_in_schema=False)
+async def stacked(request: Request):
+    """Serve the stacked-to-grouped bar chart page."""
+    return templates.TemplateResponse("stacked.html", {"request": request})
+
+
+@app.get("/telephone", include_in_schema=False)
+async def telephone(request: Request):
+    """Serve the AI Echo Chamber telephone experiment page."""
+    return templates.TemplateResponse("telephone.html", {"request": request})

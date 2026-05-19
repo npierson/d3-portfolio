@@ -40,7 +40,7 @@ def get_db():
 
 def _seed():
     """Insert sample data only when the table is empty."""
-    from models import ChartDataPoint
+    from models import ChartDataPoint, StackedDataPoint
     db = SessionLocal()
     try:
         if db.query(ChartDataPoint).count() == 0:
@@ -57,6 +57,37 @@ def _seed():
                 ChartDataPoint(chart="line", label="Q4", value=178),
             ]
             db.add_all(samples)
+            db.commit()
+
+        if db.query(StackedDataPoint).count() == 0:
+            # Regional sales ($k) by product category — 5 regions × 4 categories
+            stacked_samples = [
+                # Electronics
+                StackedDataPoint(group="North",   series="Electronics", value=120),
+                StackedDataPoint(group="South",   series="Electronics", value=95),
+                StackedDataPoint(group="East",    series="Electronics", value=140),
+                StackedDataPoint(group="West",    series="Electronics", value=108),
+                StackedDataPoint(group="Central", series="Electronics", value=87),
+                # Clothing
+                StackedDataPoint(group="North",   series="Clothing", value=75),
+                StackedDataPoint(group="South",   series="Clothing", value=88),
+                StackedDataPoint(group="East",    series="Clothing", value=62),
+                StackedDataPoint(group="West",    series="Clothing", value=95),
+                StackedDataPoint(group="Central", series="Clothing", value=70),
+                # Food
+                StackedDataPoint(group="North",   series="Food", value=55),
+                StackedDataPoint(group="South",   series="Food", value=72),
+                StackedDataPoint(group="East",    series="Food", value=49),
+                StackedDataPoint(group="West",    series="Food", value=61),
+                StackedDataPoint(group="Central", series="Food", value=80),
+                # Furniture
+                StackedDataPoint(group="North",   series="Furniture", value=40),
+                StackedDataPoint(group="South",   series="Furniture", value=33),
+                StackedDataPoint(group="East",    series="Furniture", value=58),
+                StackedDataPoint(group="West",    series="Furniture", value=45),
+                StackedDataPoint(group="Central", series="Furniture", value=29),
+            ]
+            db.add_all(stacked_samples)
             db.commit()
     finally:
         db.close()

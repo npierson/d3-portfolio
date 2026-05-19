@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from database import get_db
-from models import ChartDataPoint
-from schemas import DataPointOut, DataPointIn
+from models import ChartDataPoint, StackedDataPoint
+from schemas import DataPointOut, DataPointIn, StackedPointOut
 
 router = APIRouter()
 
@@ -36,3 +36,11 @@ def add_data_point(point: DataPointIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_point)
     return db_point
+
+
+@router.get("/stacked", response_model=List[StackedPointOut])
+def get_stacked_data(db: Session = Depends(get_db)):
+    """Return all rows for the stacked/grouped bar chart."""
+    return db.query(StackedDataPoint).order_by(
+        StackedDataPoint.series, StackedDataPoint.group
+    ).all()

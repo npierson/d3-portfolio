@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stacked / Grouped Bars – D3 Portfolio</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f8f9fa;
+      margin: 0;
+      padding: 2rem;
+      color: #333;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    .chart-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 1.5rem 2rem;
+      max-width: 760px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 0.4rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn:hover   { background: #f0f0f0; }
+    .btn.active  { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.82rem;
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    svg text { font-size: 12px; fill: #555; }
+
+    .axis path, .axis line { stroke: #ddd; }
+
+    .bar { cursor: default; }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      padding: 0.4rem 0.7rem;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1rem;
+      color: #4a90d9;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <a href="/" class="back-link">← Back to Portfolio</a>
+  <h1>Regional Sales by Category</h1>
+  <p class="subtitle">Toggle between stacked and grouped views — animated with D3 transitions.</p>
+
+  <div class="chart-card">
+    <div class="controls">
+      <button class="btn active" id="btn-stacked">Stacked</button>
+      <button class="btn"        id="btn-grouped">Grouped</button>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <div id="chart" style="position:relative;"></div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script type="module">
+    import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+    // ── Config ────────────────────────────────────────────────────────────────
+    const WIDTH   = 660;
+    const HEIGHT  = 340;
+    const MARGIN  = { top: 20, right: 20, bottom: 50, left: 60 };
+    const INNER_W = WIDTH  - MARGIN.left - MARGIN.right;
+    const INNER_H = HEIGHT - MARGIN.top  - MARGIN.bottom;
+    const DURATION = 700;                      // transition ms
+
+    const COLORS = ["#4a90d9", "#e07b54", "#54b87a", "#a678d4"];
+
+    // ── Fetch data ────────────────────────────────────────────────────────────
+    const raw = await fetch("/api/stacked").then(r => r.json());
+    // raw: [{id, group, series, value}, ...]
+
+    // Derive ordered keys
+    const groups  = [...new Set(raw.map(d => d.group))];   // x-axis bands
+    const series  = [...new Set(raw.map(d => d.series))];  // color layers
+
+    // Convert to wide format: [{group: "North", Electronics: 120, Clothing: 75, …}, …]
+    const wide = groups.map(g => {
+      const row = { group: g };
+      series.forEach(s => {
+        const match = raw.find(d => d.group === g && d.series === s);
+        row[s] = match ? match.value : 0;
+      });
+      return row;
+    });
+
+    // ── Stack layout ──────────────────────────────────────────────────────────
+    const stack   = d3.stack().keys(series);
+    const stacked = stack(wide);       // array of series layers, each with [y0,y1] per group
+
+    // ── Scales ────────────────────────────────────────────────────────────────
+    const xScale = d3.scaleBand()
+      .domain(groups)
+      .range([0, INNER_W])
+      .paddingInner(0.2)
+      .paddingOuter(0.1);
+
+    // Inner band for grouped mode (subdivide each xScale slot)
+    const xzScale = d3.scaleBand()
+      .domain(series)
+      .range([0, xScale.bandwidth()])
+      .padding(0.05);
+
+    const yMax = d3.max(stacked, layer => d3.max(layer, d => d[1]));
+    const yScale = d3.scaleLinear()
+      .domain([0, yMax * 1.05])
+      .range([INNER_H, 0]);
+
+    const color = d3.scaleOrdinal().domain(series).range(COLORS);
+
+    // ── SVG setup ─────────────────────────────────────────────────────────────
+    const svg = d3.select("#chart").append("svg")
+      .attr("viewBox", `0 0 ${WIDTH} ${HEIGHT}`)
+      .attr("width",  "100%")
+      .style("overflow", "visible");
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+
+    // Axes
+    const xAxis = g.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0,${INNER_H})`)
+      .call(d3.axisBottom(xScale).tickSizeOuter(0));
+
+    const yAxis = g.append("g")
+      .attr("class", "axis")
+      .call(d3.axisLeft(yScale).ticks(6).tickFormat(d => `$${d}k`));
+
+    yAxis.append("text")
+      .attr("fill", "#888")
+      .attr("transform", "rotate(-90)")
+      .attr("x", -INNER_H / 2)
+      .attr("y", -45)
+      .attr("text-anchor", "middle")
+      .text("Sales ($k)");
+
+    // ── Tooltip ───────────────────────────────────────────────────────────────
+    const tooltip = d3.select("#tooltip");
+
+    function showTip(event, d, seriesName) {
+      const value = d[1] - d[0];
+      tooltip
+        .style("opacity", 1)
+        .style("left", (event.pageX + 12) + "px")
+        .style("top",  (event.pageY - 28) + "px")
+        .html(`<strong>${seriesName}</strong><br/>${d.data.group}: $${value}k`);
+    }
+
+    function hideTip() {
+      tooltip.style("opacity", 0);
+    }
+
+    // ── Draw bars (stacked positions to start) ────────────────────────────────
+    const layerGroups = g.selectAll(".layer")
+      .data(stacked)
+      .join("g")
+        .attr("class", "layer")
+        .attr("fill", layer => color(layer.key));
+
+    const bars = layerGroups.selectAll("rect")
+      .data(layer => layer.map(d => ({ ...d, key: layer.key })))
+      .join("rect")
+        .attr("class", "bar")
+        .attr("x",      d => xScale(d.data.group))
+        .attr("y",      d => yScale(d[1]))
+        .attr("width",  xScale.bandwidth())
+        .attr("height", d => yScale(d[0]) - yScale(d[1]))
+        .on("mousemove", (event, d) => showTip(event, d, d.key))
+        .on("mouseleave", hideTip);
+
+    // ── Legend ────────────────────────────────────────────────────────────────
+    const legendEl = d3.select("#legend");
+    series.forEach(s => {
+      const item = legendEl.append("div").attr("class", "legend-item");
+      item.append("div")
+        .attr("class", "legend-swatch")
+        .style("background", color(s));
+      item.append("span").text(s);
+    });
+
+    // ── Transition helpers ────────────────────────────────────────────────────
+    let isStacked = true;
+
+    function transitionStacked() {
+      const t = svg.transition().duration(DURATION).ease(d3.easeCubicInOut);
+
+      // Update y scale max to stacked total
+      const newYMax = d3.max(stacked, layer => d3.max(layer, d => d[1]));
+      yScale.domain([0, newYMax * 1.05]);
+      yAxis.transition(t).call(
+        d3.axisLeft(yScale).ticks(6).tickFormat(d => `$${d}k`)
+      );
+
+      layerGroups.selectAll("rect")
+        .transition(t)
+          .attr("x",      d => xScale(d.data.group))
+          .attr("y",      d => yScale(d[1]))
+          .attr("width",  xScale.bandwidth())
+          .attr("height", d => yScale(d[0]) - yScale(d[1]));
+    }
+
+    function transitionGrouped() {
+      const t = svg.transition().duration(DURATION).ease(d3.easeCubicInOut);
+
+      // Update y scale max to individual bar max
+      const newYMax = d3.max(wide, d => d3.max(series, s => d[s]));
+      yScale.domain([0, newYMax * 1.05]);
+      yAxis.transition(t).call(
+        d3.axisLeft(yScale).ticks(6).tickFormat(d => `$${d}k`)
+      );
+
+      layerGroups.selectAll("rect")
+        .transition(t)
+          .attr("x",      d => xScale(d.data.group) + xzScale(d.key))
+          .attr("y",      d => yScale(d[1] - d[0]))
+          .attr("width",  xzScale.bandwidth())
+          .attr("height", d => yScale(0) - yScale(d[1] - d[0]));
+    }
+
+    // ── Button wiring ─────────────────────────────────────────────────────────
+    d3.select("#btn-stacked").on("click", () => {
+      if (isStacked) return;
+      isStacked = true;
+      d3.select("#btn-stacked").classed("active", true);
+      d3.select("#btn-grouped").classed("active", false);
+      transitionStacked();
+    });
+
+    d3.select("#btn-grouped").on("click", () => {
+      if (!isStacked) return;
+      isStacked = false;
+      d3.select("#btn-grouped").classed("active", true);
+      d3.select("#btn-stacked").classed("active", false);
+      transitionGrouped();
+    });
+  </script>
+
+</body>
+</html>
