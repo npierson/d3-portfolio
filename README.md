@@ -60,7 +60,7 @@ Two ORM models in [models.py](models.py), each backing one chart family:
 3. Expose an endpoint in [routers/data.py](routers/data.py).
 4. Add a page route in [main.py](main.py) and a template that fetches from it.
 
-## Using Postgres instead of SQLite
+## Scaling up - can bump up to Postgres
 
 No code change needed — set `DATABASE_URL` before launching:
 
