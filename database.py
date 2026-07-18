@@ -3,6 +3,7 @@ Database setup – SQLite via SQLAlchemy.
 Swap DATABASE_URL for a Postgres URL in production with zero code changes.
 """
 import os
+import json
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
@@ -27,6 +28,7 @@ def init_db():
     from models import ChartDataPoint  # avoid circular import at module level
     Base.metadata.create_all(bind=engine)
     _seed()
+    _seed_inflation()
 
 
 def get_db():
@@ -88,6 +90,44 @@ def _seed():
                 StackedDataPoint(group="Central", series="Furniture", value=29),
             ]
             db.add_all(stacked_samples)
+            db.commit()
+    finally:
+        db.close()
+
+
+def _seed_inflation():
+    """Load inflation_data.json (BLS CPI via FRED, see inflation_etl.py) and seed
+    the InflationDataPoint table plus an 'unemployment' ChartDataPoint series.
+    Only runs when the tables are empty.
+    """
+    from models import InflationDataPoint, ChartDataPoint
+
+    json_path = os.path.join(os.path.dirname(__file__), "inflation_data.json")
+    if not os.path.exists(json_path):
+        return
+
+    db = SessionLocal()
+    try:
+        if db.query(InflationDataPoint).count() == 0:
+            with open(json_path) as f:
+                payload = json.load(f)
+
+            inflation_rows = [
+                InflationDataPoint(
+                    category=row["category"],
+                    month=row["month"],
+                    yoy_pct=row["yoy_pct"],
+                )
+                for row in payload.get("inflation", [])
+            ]
+            db.add_all(inflation_rows)
+
+            unemployment_rows = [
+                ChartDataPoint(chart="unemployment", label=row["month"], value=row["rate"])
+                for row in payload.get("unemployment", [])
+            ]
+            db.add_all(unemployment_rows)
+
             db.commit()
     finally:
         db.close()

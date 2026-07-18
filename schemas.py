@@ -26,3 +26,12 @@ class StackedPointOut(BaseModel):
     value:  float
 
     model_config = {"from_attributes": True}
+
+
+class InflationPointOut(BaseModel):
+    id:       int
+    category: str
+    month:    str
+    yoy_pct:  float
+
+    model_config = {"from_attributes": True}

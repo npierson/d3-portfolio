@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from database import get_db
-from models import ChartDataPoint, StackedDataPoint
-from schemas import DataPointOut, DataPointIn, StackedPointOut
+from models import ChartDataPoint, StackedDataPoint, InflationDataPoint
+from schemas import DataPointOut, DataPointIn, StackedPointOut, InflationPointOut
 
 router = APIRouter()
 
@@ -43,4 +43,15 @@ def get_stacked_data(db: Session = Depends(get_db)):
     """Return all rows for the stacked/grouped bar chart."""
     return db.query(StackedDataPoint).order_by(
         StackedDataPoint.series, StackedDataPoint.group
+    ).all()
+
+
+@router.get("/inflation", response_model=List[InflationPointOut])
+def get_inflation_data(db: Session = Depends(get_db)):
+    """Return year-over-year CPI inflation by category, one row per (category, month).
+
+    Source: BLS Consumer Price Index via FRED. See inflation_etl.py to refresh.
+    """
+    return db.query(InflationDataPoint).order_by(
+        InflationDataPoint.category, InflationDataPoint.month
     ).all()

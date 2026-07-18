@@ -26,3 +26,17 @@ class StackedDataPoint(Base):
     group  = Column(String, index=True, nullable=False)  # x-axis band, e.g. "Q1"
     series = Column(String, index=True, nullable=False)  # color series, e.g. "Electronics"
     value  = Column(Float,  nullable=False)
+
+
+class InflationDataPoint(Base):
+    """Year-over-year CPI inflation rate for one category in one month.
+
+    Source data: BLS Consumer Price Index (via FRED), seeded from
+    inflation_data.json — see inflation_etl.py to regenerate.
+    """
+    __tablename__ = "inflation_data"
+
+    id       = Column(Integer, primary_key=True, index=True)
+    category = Column(String, index=True, nullable=False)  # e.g. "Shelter", "All Items"
+    month    = Column(String, index=True, nullable=False)  # "YYYY-MM"
+    yoy_pct  = Column(Float,  nullable=False)               # year-over-year % change

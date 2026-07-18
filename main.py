@@ -51,3 +51,9 @@ async def stacked(request: Request):
 async def telephone(request: Request):
     """Serve the AI Echo Chamber telephone experiment page."""
     return templates.TemplateResponse("telephone.html", {"request": request})
+
+
+@app.get("/inflation", include_in_schema=False)
+async def inflation(request: Request):
+    """Serve the post-COVID inflation dashboard page."""
+    return templates.TemplateResponse("inflation.html", {"request": request})

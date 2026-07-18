@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inflation Dashboard – D3 Portfolio</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f8f9fa;
+      margin: 0;
+      padding: 2rem;
+      color: #333;
+    }
+
+    .wrap { max-width: 900px; margin: 0 auto; }
+
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+
+    .subtitle { color: #666; margin-bottom: 1.5rem; font-size: 0.95rem; max-width: 640px; }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1rem;
+      color: #4a90d9;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    .context-bar {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 1rem 1.5rem;
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .stat-card .stat-label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #888;
+      margin-bottom: 0.3rem;
+    }
+
+    .stat-card .stat-value {
+      font-size: 1.7rem;
+      font-weight: 600;
+    }
+
+    .stat-card .stat-note {
+      font-size: 0.8rem;
+      color: #777;
+      margin-top: 0.2rem;
+    }
+
+    .stat-value.good  { color: #2f9e44; }
+    .stat-value.bad   { color: #d9480f; }
+
+    .chart-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 1.5rem 2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .chart-card h2 {
+      font-size: 1.05rem;
+      margin: 0 0 0.2rem 0;
+    }
+
+    .chart-card .chart-desc {
+      font-size: 0.85rem;
+      color: #777;
+      margin: 0 0 1rem 0;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.82rem;
+      cursor: pointer;
+      user-select: none;
+      opacity: 1;
+      transition: opacity 0.15s;
+    }
+
+    .legend-item.off { opacity: 0.35; }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    svg text { font-size: 12px; fill: #555; }
+    .axis path, .axis line { stroke: #ddd; }
+    .zero-line { stroke: #bbb; stroke-dasharray: 3 3; }
+
+    .hover-line { stroke: #999; stroke-width: 1; pointer-events: none; }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+      line-height: 1.4;
+    }
+
+    .bar-label { font-size: 12px; fill: #333; }
+    .bar-value { font-size: 12px; fill: #333; font-weight: 600; }
+
+    footer {
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 1rem;
+    }
+    footer a { color: #4a90d9; }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <a href="/" class="back-link">← Back to Portfolio</a>
+    <h1>Inflation, Post-COVID</h1>
+    <p class="subtitle">
+      Employment has looked steady for years. Everyday affordability hasn't felt that way.
+      This dashboard breaks headline CPI into the categories driving the squeeze —
+      year-over-year change, U.S. city average, not seasonally adjusted.
+    </p>
+
+    <div class="context-bar" id="context-bar">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="chart-card">
+      <h2>Year-over-year inflation by category</h2>
+      <p class="chart-desc">Click a legend item to isolate or restore a category. Hover the chart for exact values.</p>
+      <div class="legend" id="legend"></div>
+      <div id="line-chart" style="position:relative;"></div>
+    </div>
+
+    <div class="chart-card">
+      <h2>Which categories are running hottest right now</h2>
+      <p class="chart-desc" id="latest-month-desc"></p>
+      <div id="bar-chart"></div>
+    </div>
+
+    <footer>
+      Source: U.S. Bureau of Labor Statistics, Consumer Price Index, via
+      <a href="https://fred.stlouisfed.org" target="_blank">FRED</a> (Federal Reserve Bank of St. Louis).
+      Data fetched live from <code>/api/inflation</code> and <code>/api/charts/unemployment</code>.
+    </footer>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script type="module">
+    import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+    // ── Config ────────────────────────────────────────────────────────────────
+    const WIDTH   = 800;
+    const HEIGHT  = 340;
+    const MARGIN  = { top: 20, right: 20, bottom: 30, left: 50 };
+    const INNER_W = WIDTH  - MARGIN.left - MARGIN.right;
+    const INNER_H = HEIGHT - MARGIN.top  - MARGIN.bottom;
+
+    const BAR_HEIGHT_PER_ROW = 34;
+    const BAR_MARGIN = { top: 10, right: 60, bottom: 20, left: 130 };
+
+    const COLORS = {
+      "All Items":      "#555555",
+      "Shelter":        "#4a90d9",
+      "Food":           "#54b87a",
+      "Energy":         "#d9480f",
+      "Medical Care":   "#a678d4",
+      "Transportation": "#e0a83b",
+    };
+
+    const parseMonth = d3.timeParse("%Y-%m");
+    const tooltip = d3.select("#tooltip");
+
+    // ── Fetch data ────────────────────────────────────────────────────────────
+    const [inflationRaw, unemploymentRaw] = await Promise.all([
+      d3.json("/api/inflation"),
+      d3.json("/api/charts/unemployment"),
+    ]);
+
+    const categories = [...new Set(inflationRaw.map(d => d.category))];
+    // Keep "All Items" first, then the rest as returned
+    categories.sort((a, b) => (a === "All Items" ? -1 : b === "All Items" ? 1 : 0));
+
+    const byCategory = new Map(categories.map(cat => [
+      cat,
+      inflationRaw
+        .filter(d => d.category === cat)
+        .map(d => ({ date: parseMonth(d.month), month: d.month, value: d.yoy_pct }))
+        .sort((a, b) => d3.ascending(a.date, b.date)),
+    ]));
+
+    const allMonthsSorted = [...new Set(inflationRaw.map(d => d.month))].sort();
+    const latestMonth = allMonthsSorted[allMonthsSorted.length - 1];
+
+    const unemploymentSorted = unemploymentRaw
+      .map(d => ({ month: d.label, rate: d.value }))
+      .sort((a, b) => d3.ascending(a.month, b.month));
+    const latestUnemployment = unemploymentSorted[unemploymentSorted.length - 1];
+    const latestHeadline = byCategory.get("All Items").find(d => d.month === latestMonth);
+
+    // ── Context stat cards ───────────────────────────────────────────────────
+    function renderContext() {
+      const cards = [
+        {
+          label: "Unemployment rate",
+          value: `${latestUnemployment.rate.toFixed(1)}%`,
+          note: `As of ${latestUnemployment.month} — historically low`,
+          cls: "good",
+        },
+        {
+          label: "Headline CPI, year-over-year",
+          value: `${latestHeadline.value.toFixed(1)}%`,
+          note: `As of ${latestHeadline.month}`,
+          cls: latestHeadline.value > 3 ? "bad" : "",
+        },
+      ];
+
+      const div = d3.select("#context-bar").selectAll(".stat-card").data(cards).join("div")
+        .attr("class", "stat-card");
+
+      div.html(d => `
+        <div class="stat-label">${d.label}</div>
+        <div class="stat-value ${d.cls}">${d.value}</div>
+        <div class="stat-note">${d.note}</div>
+      `);
+    }
+
+    // ── Legend ────────────────────────────────────────────────────────────────
+    const activeSet = new Set(categories);
+
+    function renderLegend() {
+      const items = d3.select("#legend").selectAll(".legend-item").data(categories).join("div")
+        .attr("class", d => `legend-item${activeSet.has(d) ? "" : " off"}`)
+        .on("click", (event, d) => {
+          if (activeSet.has(d)) activeSet.delete(d); else activeSet.add(d);
+          renderLegend();
+          drawLines();
+        });
+
+      items.selectAll(".legend-swatch").data(d => [d]).join("span")
+        .attr("class", "legend-swatch")
+        .style("background", d => COLORS[d] || "#999");
+
+      items.selectAll(".legend-text").data(d => [d]).join("span")
+        .attr("class", "legend-text")
+        .text(d => d);
+    }
+
+    // ── Line chart ────────────────────────────────────────────────────────────
+    const lineSvg = d3.select("#line-chart").append("svg")
+      .attr("viewBox", `0 0 ${WIDTH} ${HEIGHT}`)
+      .attr("width", "100%")
+      .style("overflow", "visible");
+
+    const lineG = lineSvg.append("g")
+      .attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+
+    const xExtent = d3.extent(allMonthsSorted.map(parseMonth));
+    const x = d3.scaleTime().domain(xExtent).range([0, INNER_W]);
+
+    const allValues = inflationRaw.map(d => d.yoy_pct);
+    const yMin = Math.min(0, d3.min(allValues));
+    const yMax = d3.max(allValues);
+    const y = d3.scaleLinear().domain([yMin * 1.1, yMax * 1.1]).nice().range([INNER_H, 0]);
+
+    const xAxis = lineG.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0,${INNER_H})`)
+      .call(d3.axisBottom(x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat("%Y")));
+
+    const yAxis = lineG.append("g")
+      .attr("class", "axis")
+      .call(d3.axisLeft(y).ticks(6).tickFormat(d => `${d}%`));
+
+    lineG.append("line")
+      .attr("class", "zero-line")
+      .attr("x1", 0).attr("x2", INNER_W)
+      .attr("y1", y(0)).attr("y2", y(0));
+
+    const lineGen = d3.line()
+      .x(d => x(d.date))
+      .y(d => y(d.value))
+      .curve(d3.curveMonotoneX);
+
+    const linesLayer = lineG.append("g");
+    const dotsLayer = lineG.append("g");
+
+    function drawLines() {
+      const activeCats = categories.filter(c => activeSet.has(c));
+
+      const paths = linesLayer.selectAll("path").data(activeCats, d => d);
+      paths.exit().remove();
+      paths.enter().append("path")
+        .attr("fill", "none")
+        .attr("stroke-width", d => d === "All Items" ? 3 : 2)
+        .attr("stroke", d => COLORS[d] || "#999")
+        .merge(paths)
+        .attr("d", d => lineGen(byCategory.get(d)));
+
+      const endpoints = dotsLayer.selectAll("circle").data(activeCats, d => d);
+      endpoints.exit().remove();
+      endpoints.enter().append("circle")
+        .attr("r", 3.5)
+        .attr("fill", d => COLORS[d] || "#999")
+        .merge(endpoints)
+        .attr("cx", d => {
+          const series = byCategory.get(d);
+          return x(series[series.length - 1].date);
+        })
+        .attr("cy", d => {
+          const series = byCategory.get(d);
+          return y(series[series.length - 1].value);
+        });
+    }
+
+    // Hover interaction
+    const hoverLine = lineG.append("line")
+      .attr("class", "hover-line")
+      .attr("y1", 0).attr("y2", INNER_H)
+      .style("opacity", 0);
+
+    const overlay = lineG.append("rect")
+      .attr("width", INNER_W)
+      .attr("height", INNER_H)
+      .attr("fill", "none")
+      .attr("pointer-events", "all");
+
+    const bisectDate = d3.bisector(d => d.date).left;
+
+    overlay.on("mousemove", (event) => {
+      const [mx] = d3.pointer(event);
+      const hoveredDate = x.invert(mx);
+      hoverLine.attr("x1", mx).attr("x2", mx).style("opacity", 1);
+
+      const activeCats = categories.filter(c => activeSet.has(c));
+      const rows = activeCats.map(cat => {
+        const series = byCategory.get(cat);
+        let i = bisectDate(series, hoveredDate, 1);
+        i = Math.min(i, series.length - 1);
+        const d0 = series[i - 1], d1 = series[i];
+        const d = (d1 && (hoveredDate - d0.date > d1.date - hoveredDate)) ? d1 : d0;
+        return d ? `<span style="color:${COLORS[cat] || '#999'}">●</span> ${cat}: ${d.value.toFixed(1)}%` : null;
+      }).filter(Boolean);
+
+      const anyPoint = byCategory.get(activeCats[0]);
+      let refIdx = bisectDate(anyPoint, hoveredDate, 1);
+      refIdx = Math.min(refIdx, anyPoint.length - 1);
+      const monthLabel = anyPoint[refIdx].month;
+
+      tooltip
+        .style("opacity", 1)
+        .style("left", `${event.pageX + 14}px`)
+        .style("top", `${event.pageY - 10}px`)
+        .html(`<strong>${monthLabel}</strong><br>${rows.join("<br>")}`);
+    });
+
+    overlay.on("mouseleave", () => {
+      hoverLine.style("opacity", 0);
+      tooltip.style("opacity", 0);
+    });
+
+    // ── Latest-month ranking bar chart ───────────────────────────────────────
+    function renderBarChart() {
+      const latestRows = categories
+        .map(cat => {
+          const series = byCategory.get(cat);
+          const point = series.find(d => d.month === latestMonth) || series[series.length - 1];
+          return { category: cat, value: point.value };
+        })
+        .filter(d => d.category !== "All Items")
+        .sort((a, b) => d3.descending(a.value, b.value));
+
+      d3.select("#latest-month-desc").text(
+        `Year-over-year change by category, ${latestMonth}. Headline CPI was ${latestHeadline.value.toFixed(1)}% — categories above that line are outpacing the average.`
+      );
+
+      const barInnerW = WIDTH - BAR_MARGIN.left - BAR_MARGIN.right;
+      const barInnerH = latestRows.length * BAR_HEIGHT_PER_ROW;
+      const barHeightTotal = barInnerH + BAR_MARGIN.top + BAR_MARGIN.bottom;
+
+      d3.select("#bar-chart").select("svg").remove();
+      const barSvg = d3.select("#bar-chart").append("svg")
+        .attr("viewBox", `0 0 ${WIDTH} ${barHeightTotal}`)
+        .attr("width", "100%")
+        .style("overflow", "visible");
+
+      const barG = barSvg.append("g")
+        .attr("transform", `translate(${BAR_MARGIN.left},${BAR_MARGIN.top})`);
+
+      const bx = d3.scaleLinear()
+        .domain([Math.min(0, d3.min(latestRows, d => d.value)), d3.max(latestRows, d => d.value) * 1.15])
+        .range([0, barInnerW]);
+
+      const by = d3.scaleBand()
+        .domain(latestRows.map(d => d.category))
+        .range([0, barInnerH])
+        .padding(0.3);
+
+      barG.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(0,${barInnerH})`)
+        .call(d3.axisBottom(bx).ticks(5).tickFormat(d => `${d}%`));
+
+      barG.append("line")
+        .attr("class", "zero-line")
+        .attr("x1", bx(0)).attr("x2", bx(0))
+        .attr("y1", 0).attr("y2", barInnerH);
+
+      const rows = barG.selectAll(".row").data(latestRows).join("g").attr("class", "row");
+
+      rows.append("text")
+        .attr("class", "bar-label")
+        .attr("x", -10)
+        .attr("y", d => by(d.category) + by.bandwidth() / 2)
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "end")
+        .text(d => d.category);
+
+      rows.append("rect")
+        .attr("x", d => bx(Math.min(0, d.value)))
+        .attr("y", d => by(d.category))
+        .attr("height", by.bandwidth())
+        .attr("fill", d => COLORS[d.category] || "#999")
+        .attr("width", 0)
+        .transition().duration(700)
+          .attr("width", d => Math.abs(bx(d.value) - bx(0)));
+
+      rows.append("text")
+        .attr("class", "bar-value")
+        .attr("x", d => bx(d.value) + (d.value >= 0 ? 6 : -6))
+        .attr("y", d => by(d.category) + by.bandwidth() / 2)
+        .attr("dy", "0.35em")
+        .attr("text-anchor", d => d.value >= 0 ? "start" : "end")
+        .text(d => `${d.value.toFixed(1)}%`);
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    renderContext();
+    renderLegend();
+    drawLines();
+    renderBarChart();
+  </script>
+
+</body>
+</html>
