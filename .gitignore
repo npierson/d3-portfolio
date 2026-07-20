@@ -32,3 +32,5 @@ data/*.db-wal
 # OS
 .DS_Store
 Thumbs.db
+snowflake_key.p8
+snowflake_key.pub
