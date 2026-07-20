@@ -8,14 +8,18 @@ category, and writes inflation_data.json, which database._seed() loads on
 next startup (only when the inflation_data table is empty — delete
 data/portfolio.db to reseed).
 
-Series pulled (U.S. city average, not seasonally adjusted, source: BLS via FRED):
-  CPIAUCNS       All Items
-  CUUR0000SAH1   Shelter
-  CPIUFDNS       Food
-  CPIENGNS       Energy
-  CPIMEDNS       Medical Care
-  CPITRNNS       Transportation
-  UNRATE         Unemployment rate (seasonally adjusted, for context)
+Series pulled (U.S. city average, not seasonally adjusted, source: BLS via FRED).
+Categories are BLS's standard "Big 8" CPI expenditure groups:
+  CPIAUCNS   All Items
+  CPIFABNS   Food and Beverages
+  CPIHOSNS   Housing
+  CPIAPPNS   Apparel
+  CPITRNNS   Transportation
+  CPIMEDNS   Medical Care
+  CPIRECNS   Recreation
+  CPIEDUNS   Education and Communication
+  CPIOGSNS   Other Goods and Services
+  UNRATE     Unemployment rate (seasonally adjusted, for context)
 
 Usage:
   pip install requests
@@ -36,12 +40,15 @@ import requests
 FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
 
 SERIES = {
-    "All Items":      "CPIAUCNS",
-    "Shelter":        "CUUR0000SAH1",
-    "Food":           "CPIUFDNS",
-    "Energy":         "CPIENGNS",
-    "Medical Care":   "CPIMEDNS",
-    "Transportation": "CPITRNNS",
+    "All Items":                    "CPIAUCNS",
+    "Food and Beverages":           "CPIFABNS",
+    "Housing":                      "CPIHOSNS",
+    "Apparel":                      "CPIAPPNS",
+    "Transportation":               "CPITRNNS",
+    "Medical Care":                 "CPIMEDNS",
+    "Recreation":                   "CPIRECNS",
+    "Education and Communication":  "CPIEDUNS",
+    "Other Goods and Services":     "CPIOGSNS",
 }
 
 UNEMPLOYMENT_SERIES_ID = "UNRATE"
