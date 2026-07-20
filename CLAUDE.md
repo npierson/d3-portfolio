@@ -11,13 +11,17 @@ uvicorn main:app --reload
 
 Server runs at http://localhost:8000. Swagger UI at `/docs`. SQLite DB is created and seeded on first startup at `data/portfolio.db` — delete that file to reseed.
 
-To use Postgres instead: `export DATABASE_URL="postgresql+psycopg2://..."` before launching. No code change needed (`database.py:11`).
+To use Postgres instead: `export DATABASE_URL="postgresql+psycopg2://..."` before launching. No code change needed.
+
+**Snowflake** is supported via key-pair (JWT) auth and is selected automatically when `SNOWFLAKE_ACCOUNT` is set. `database.py` reads the connection params (`SNOWFLAKE_ACCOUNT`, `_USER`, `_WAREHOUSE`, `_DATABASE`, `_SCHEMA`, `_ROLE`) from env vars / `.env`, loads the RSA private key from `snowflake_key.p8`, converts it to DER, and passes it to the connector via `connect_args` (the key can't live in the URL string). Backend precedence in `database.py`: **Snowflake** (if `SNOWFLAKE_ACCOUNT` set) → **`DATABASE_URL`** → **SQLite** default — so commenting out `SNOWFLAKE_ACCOUNT` in `.env` falls back to local SQLite with zero code change. Requires `snowflake-sqlalchemy` + `python-dotenv` (both in `requirements.txt`, unlike the ETL-script deps). Register the public key on the Snowflake side once with `ALTER USER <user> SET RSA_PUBLIC_KEY='<body of snowflake_key.pub, no header/newlines>'` (needs SECURITYADMIN/ACCOUNTADMIN); verify with `DESC USER <user>` — the `RSA_PUBLIC_KEY_FP` must match `SHA256:` + `openssl rsa -pubin -in snowflake_key.pub -outform DER | openssl dgst -sha256 -binary | openssl enc -base64`. **Secrets are gitignored:** `snowflake_key.p8`, `snowflake_key.pub`, and `.env` — never commit them.
+
+Two Snowflake-specific gotchas the code already handles, worth knowing if you touch `database.py`: (1) Snowflake has **no traditional indexes**, so `init_db()` clears `table.indexes` before `create_all` when on Snowflake (primary keys are unaffected). (2) Snowflake **doesn't return autoincrement PKs** to SQLAlchemy's ORM identity map, which raises `FlushError: NULL identity key` on `add_all` — so `_seed()`/`_seed_inflation()` seed via **Core bulk inserts** (`db.execute(insert(Model), [dicts])`), letting Snowflake generate the id. Use that pattern for any new seeding that must run on Snowflake.
 
 **Dependency versions matter.** If you `pip install` packages ad hoc instead of `pip install -r requirements.txt`, you can end up with a `fastapi`/`starlette` newer than the pinned `jinja2==3.1.4` expects, which throws `TypeError: unhashable type: 'dict'` inside `Jinja2Templates.TemplateResponse` on every page route (not just new ones — it breaks `/` too). If page routes 500 with that error, reinstall from `requirements.txt` exactly.
 
 ## Architecture
 
-FastAPI app with two distinct response surfaces backed by one SQLAlchemy/SQLite store:
+FastAPI app with two distinct response surfaces backed by one SQLAlchemy store (SQLite by default; Postgres via `DATABASE_URL` or Snowflake via `SNOWFLAKE_ACCOUNT` — see "Running the app"):
 
 - **Page routes** live directly on the app in `main.py` (`/`, `/stacked`, `/telephone`, `/inflation`) and render Jinja2 templates from `templates/`.
 - **JSON API routes** live in `routers/data.py` under the `/api` prefix and return ORM rows via Pydantic schemas in `schemas.py`.
@@ -34,7 +38,7 @@ Three ORM models in `models.py`, each backing one chart family:
 - `StackedDataPoint` (`group`, `series`, `value`) — one row per (group, series) cell. Served by `/api/stacked`.
 - `InflationDataPoint` (`category`, `month`, `yoy_pct`) — one row per (CPI category, month), year-over-year % change. Served by `/api/inflation`.
 
-When adding a new chart type, the convention is: add a new ORM model, seed it inside `database._seed()` (guarded by an empty-table check), expose a new endpoint in `routers/data.py`, and add a page route in `main.py` + a template that fetches from it. `InflationDataPoint` deviates slightly: its seeding is a separate `database._seed_inflation()` call (also empty-table guarded, invoked right after `_seed()` in `init_db()`) because it reads from a checked-in JSON file rather than inline Python literals — follow that split if a new chart type is also backed by an offline data-fetch script rather than hardcoded samples.
+When adding a new chart type, the convention is: add a new ORM model, seed it inside `database._seed()` (guarded by an empty-table check; use Core bulk inserts — `db.execute(insert(Model), [dicts])` — not ORM `add_all`, so seeding works on Snowflake too), expose a new endpoint in `routers/data.py`, and add a page route in `main.py` + a template that fetches from it. `InflationDataPoint` deviates slightly: its seeding is a separate `database._seed_inflation()` call (also empty-table guarded, invoked right after `_seed()` in `init_db()`) because it reads from a checked-in JSON file rather than inline Python literals — follow that split if a new chart type is also backed by an offline data-fetch script rather than hardcoded samples.
 
 ### telephone_etl.py
 
